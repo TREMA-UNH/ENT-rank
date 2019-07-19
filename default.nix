@@ -49,7 +49,6 @@ let
   };
 in {
   pkgs = nixpkgs;
-  inherit (haskellPackages.wordnet-export.passthru) ukb;
   inherit haskellPackages haskellOverrides;
   inherit (haskellPackages) trecCarPackages;
   inherit (simplirNix) simplirPackages trec-eval;
