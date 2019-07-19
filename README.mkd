@@ -1,0 +1,10 @@
+# Installation
+
+Insteall nix-packages
+
+call `nix build -f . binaries`
+
+Run ./result/bin/graph-expansion-feature-generation
+
+
+
