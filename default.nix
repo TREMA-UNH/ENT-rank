@@ -1,4 +1,4 @@
-{ nixpkgs ? (import simplir/nixpkgs.nix {}) }:
+{ nixpkgs ? (import trec-car-tools-haskell/simplir/nixpkgs.nix {}) }:
 
 let
   inherit (nixpkgs.haskell.lib) dontCheck doJailbreak;
@@ -13,7 +13,7 @@ let
 
   localDir = nixpkgs.nix-gitignore.gitignoreSourcePure [ ./.gitignore ];
 
-  simplirNix = import ./simplir { inherit nixpkgs; };
+  simplirNix = import ./trec-car-tools-haskell/simplir { inherit nixpkgs; };
 
   haskellOverrides = self: super:
     let

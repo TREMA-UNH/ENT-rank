@@ -1,0 +1,11 @@
+dist
+dist-newstyle
+bin
+*.o
+*.hi
+.ghc.environment.*
+.ghci
+TAGS
+cabal.project.local
+*.iml
+.idea
