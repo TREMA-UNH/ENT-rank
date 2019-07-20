@@ -21,7 +21,7 @@ Alternatively compiling with cabal
 6. to compile and run call `cabal new-run graph-expansion-feature-generation` (or other executables described below)
 
 
-# Run 
+# Usage
 
-
+For detailed instructions for running the code, as well as downloading pre-trained models, and run files see <https://www.cs.unh.edu/~dietz/appendix/ent-rank/>
 
