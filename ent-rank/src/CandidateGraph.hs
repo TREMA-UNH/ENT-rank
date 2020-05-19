@@ -16,28 +16,19 @@ module CandidateGraph where
 
 import GHC.Generics
 import Control.DeepSeq
-import Control.Concurrent.Async
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import Data.Hashable
 import Data.Text as T
 
 import CAR.Types hiding (Entity)
-import CAR.Utils
 import AspectUtils
-import qualified Clone.RunFile as CarRun
 import GridFeatures
 
 import EdgeDocCorpus
 import LookupWrapper
 
-import qualified Clone.RunFile as CAR.RunFile
 import MultiTrecRunFile
-
-
-
-import Debug.Trace
-
 
 
 data CandidateGraphSettings = CandidateGraphSettings { cfsMadeFromEntityRuns :: Bool
