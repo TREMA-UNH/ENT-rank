@@ -8,7 +8,6 @@ packages:
     trec-car-tools-haskell/trec-car-types/
     ent-rank-tools/
     ent-rank/
-    graph-algorithms/
     trec-car-tools-haskell/simplir/*/*.cabal
     trec-car-tools-haskell/simplir/vendor/*/*.cabal
 

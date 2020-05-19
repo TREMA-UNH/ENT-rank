@@ -15,11 +15,8 @@ cradle:
     - path: "ent-rank-tools/src"
       component: "lib:ent-rank-tools"
 
-    - path: "graph-algorithms/src"
+    - path: "trec-car-tools-haskell/simplir/graph-algorithms/src"
       component: "lib:graph-algorithms"
-
-    - path: "trec-car-tools-haskell/simplir/simplir/src"
-      component: "lib:simplir"
 
     - path: "trec-car-tools-haskell/simplir/simplir/src"
       component: "lib:simplir"
