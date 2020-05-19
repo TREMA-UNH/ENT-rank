@@ -1,0 +1,178 @@
+cradle:
+  cabal:
+    - path: "vendor/pinch"
+      component: "lib:pinch"
+
+    - path: "ent-rank/src"
+      component: "lib:ent-rank"
+
+    - path: "ent-rank/.//EntRankMain.hs"
+      component: "ent-rank:exe:graph-expansion-feature-generation"
+
+    - path: "ent-rank/.//PageDocCorpusMain.hs"
+      component: "ent-rank:exe:graph-expansion-page-doc"
+
+    - path: "ent-rank-tools/src"
+      component: "lib:ent-rank-tools"
+
+    - path: "graph-algorithms/src"
+      component: "lib:graph-algorithms"
+
+    - path: "trec-car-tools-haskell/simplir/simplir/src"
+      component: "lib:simplir"
+
+    - path: "trec-car-tools-haskell/simplir/simplir/src"
+      component: "lib:simplir"
+
+    - path: "trec-car-tools-haskell/simplir/simplir/tests"
+      component: "simplir:test:tests"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-data-source/./"
+      component: "lib:simplir-data-source"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-data-source-s3/./"
+      component: "lib:simplir-data-source-s3"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-disk-index/src"
+      component: "lib:simplir-disk-index"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-disk-index/src"
+      component: "lib:simplir-disk-index"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-disk-index/.//DumpPostings.hs"
+      component: "simplir-disk-index:exe:dump-postings"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-disk-index/tests"
+      component: "simplir-disk-index:test:tests"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-eval/src"
+      component: "lib:simplir-eval"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-eval/src"
+      component: "lib:simplir-eval"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-eval/.//Main.hs"
+      component: "simplir-eval:exe:simplir-eval"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-eval/.//MergeRankings.hs"
+      component: "simplir-eval:exe:simplir-merge-runs"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-eval/tests"
+      component: "simplir-eval:test:vs-trec-eval"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-galago/."
+      component: "lib:simplir-galago"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-html-clean/src"
+      component: "lib:simplir-html-clean"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-html-clean/.//Main.hs"
+      component: "simplir-html-clean:exe:html-clean"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-io/src"
+      component: "lib:simplir-io"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-kyoto-index/src"
+      component: "lib:simplir-kyoto-index"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-learning-to-rank/src"
+      component: "lib:simplir-learning-to-rank"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-learning-to-rank/.//Learn2Rank.hs"
+      component: "simplir-learning-to-rank:exe:simplir-learn2rank"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-learning-to-rank/tests"
+      component: "simplir-learning-to-rank:test:tests"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-leveldb-index/src"
+      component: "lib:simplir-leveldb-index"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-pipes-utils/src"
+      component: "lib:simplir-pipes-utils"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-stop-words/src"
+      component: "lib:simplir-stop-words"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-tools/.//Search.hs"
+      component: "simplir-tools:exe:simplir"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-tools/.//Search2.hs"
+      component: "simplir-tools:exe:simplir2"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec/./"
+      component: "lib:simplir-trec"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec/.//Benchmark.hs"
+      component: "simplir-trec:bench:bench"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec-streaming/src"
+      component: "lib:simplir-trec-streaming"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec-streaming/.//ListDocuments.hs"
+      component: "simplir-trec-streaming:exe:trec-streaming-ls-documents"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec-streaming/.//IndexFac.hs"
+      component: "simplir-trec-streaming:exe:index-fac"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec-streaming/.//Streaming.hs"
+      component: "simplir-trec-streaming:exe:kba-streaming"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec-streaming/.//MergeRankings.hs"
+      component: "simplir-trec-streaming:exe:merge-kba-rankings"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-trec-streaming/.//Extract.hs"
+      component: "simplir-trec-streaming:exe:extract-kba-documents"
+
+    - path: "trec-car-tools-haskell/simplir/simplir-word-embedding/src"
+      component: "lib:simplir-word-embedding"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/fork-map/src"
+      component: "lib:fork-map"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/fork-map/.//Test.hs"
+      component: "fork-map:exe:fork-map-test"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/html-parse/./"
+      component: "lib:html-parse"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/html-parse/.//Benchmark.hs"
+      component: "html-parse:bench:bench"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/html-parse/tests"
+      component: "html-parse:test:spec"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/http-parsers/./"
+      component: "lib:http-parsers"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/http-parsers/test"
+      component: "http-parsers:test:Test"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/http-parsers/."
+      component: "http-parsers:test:Test"
+
+    - path: "trec-car-tools-haskell/simplir/vendor/indexed-vector/src"
+      component: "lib:indexed-vector"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/src"
+      component: "lib:trec-car-tools"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/.//Cat.hs"
+      component: "trec-car-tools:exe:trec-car-cat"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/.//BuildToc.hs"
+      component: "trec-car-tools:exe:trec-car-build-toc"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/.//DumpPages.hs"
+      component: "trec-car-tools:exe:trec-car-dump"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/.//TrecRunFilter.hs"
+      component: "trec-car-tools:exe:trec-car-trec-run-filter"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/.//TrecRunModify.hs"
+      component: "trec-car-tools:exe:trec-car-trec-run-modify"
+
+    - path: "trec-car-tools-haskell/trec-car-tools/.//QrelsModify.hs"
+      component: "trec-car-tools:exe:trec-car-qrels-modify"
+
+    - path: "trec-car-tools-haskell/trec-car-types/src"
+      component: "lib:trec-car-types"
