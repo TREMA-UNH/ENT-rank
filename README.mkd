@@ -33,3 +33,10 @@ Mistakes happen. Please submit issues through the issue tracker. Once you receiv
 
 For detailed instructions for running the code, as well as downloading pre-trained models, and run files see <https://www.cs.unh.edu/~dietz/appendix/ent-rank/>
 
+# Project Structure
+
+This project consists of a few components:
+
+ * `ENT-rank`: An implementation of the ENT-rank method
+   * `trec-car-tools-haskell`: utilities and types for interacting with the TREC-CAR data set
+     * `simplir`: A toolbox for building information retrieval systems
