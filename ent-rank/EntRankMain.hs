@@ -15,6 +15,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
+module Main where
 import Control.DeepSeq hiding (rwhnf)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
