@@ -1,3 +1,5 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -63,6 +65,8 @@ import SimplIR.Intern
 
 import qualified Clone.RunFile as CAR.RunFile
 import qualified SimplIR.Format.QRel as QRel
+import qualified SimplIR.Format.TrecRunFile as TRun
+import qualified SimplIR.Format.JsonRunQrels as JRun
 import MultiTrecRunFile
 import Graph
 
@@ -80,6 +84,7 @@ import NodeAndEdgeFeatures
 import TrainAndStore
 
 import Debug.Trace  as Debug
+import qualified Data.Aeson as Aeson
 
 type NumResults = Int
 
@@ -120,7 +125,7 @@ data PosifyEdgeWeights = Exponentiate | ExpDenormWeight | Linear | Logistic | Cu
   deriving (Show, Read, Ord, Eq, Enum, Bounded)
 
 
-data FlowParser = NormalFlowArguments' NormalFlowArguments | FlowTrainOnly' FlowTrainOnly | ExportRankLips' FlowTrainOnly
+data FlowParser = NormalFlowArguments' NormalFlowArguments | FlowTrainOnly' FlowTrainOnly | ExportRankLips' NormalFlowArguments
 
 opts :: Parser (FlowParser)
 opts = commands <|> fmap NormalFlowArguments' normalArgs
@@ -299,22 +304,10 @@ trainOnlyFlow FlowTrainOnly {..} = do
     SerialisedTrainingData fspaces allData <- CBOR.deserialise <$> BSL.readFile (trainDataFileOpt)
     train True fspaces allData qrel miniBatchParams outputFilePrefix modelFile
 
-rankLipsExport :: FlowTrainOnly -> IO ()
-rankLipsExport FlowTrainOnly {..} = do
-    putStrLn $ " TrainDataFile : "++ (show trainDataFileOpt)
-
-    let fixQRel :: QRel.Entry QRel.QueryId QRel.DocumentName QRel.IsRelevant
-                -> QRel.Entry CAR.RunFile.QueryId QRel.DocumentName QRel.IsRelevant
-        fixQRel (QRel.Entry qid docId rel) = QRel.Entry (CAR.RunFile.QueryId qid) docId rel
-    qrel <- map fixQRel <$> QRel.readQRel @IsRelevant qrelFile
-
-    SerialisedTrainingData fspaces allData <- CBOR.deserialise <$> BSL.readFile (trainDataFileOpt)
-    -- train True fspaces allData qrel miniBatchParams outputFilePrefix modelFile
-    exportRankLipsTrainData fspaces allData qrel outputFilePrefix modelFile
 
 
 
-data PrepArgs allEntFeats allEdgeFeats = PrepArgs {
+data PrepArgs  = PrepArgs {
   edgeDocsLookup :: EdgeDocsLookup
   , pagesLookup :: AbstractLookup PageId
   , aspectLookup :: AbstractLookup AspectId
@@ -361,7 +354,7 @@ normalFlow args@(NormalFlowArguments {..})  = do
     performTrainingNormalFlow args prepArgs featureArgs
 
 
-prepareNormalFlow :: NormalFlowArguments -> IO (PrepArgs allEntFeats allEdgeFeats)
+prepareNormalFlow :: NormalFlowArguments -> IO (PrepArgs)
 prepareNormalFlow NormalFlowArguments {..}  = do
 
     putStrLn $ "# Pages: " ++ show articlesFile
@@ -488,7 +481,7 @@ prepareNormalFlow NormalFlowArguments {..}  = do
     putStrLn $ "queries from collapsed edge doc runs: "++show (M.size collapsedEdgedocRun)
     return $ PrepArgs{..}
 
-generateFeaturesNormalFlow :: NormalFlowArguments -> PrepArgs allEntFeats allEdgeFeats -> IO (FeatureArgs)
+generateFeaturesNormalFlow :: NormalFlowArguments -> PrepArgs -> IO (FeatureArgs)
 generateFeaturesNormalFlow (NormalFlowArguments {..}) PrepArgs{..} = do
 
 
@@ -524,7 +517,7 @@ generateFeaturesNormalFlow (NormalFlowArguments {..}) PrepArgs{..} = do
     return $ FeatureArgs{..}
 
 
-performTrainingNormalFlow :: NormalFlowArguments -> PrepArgs allEntFeats allEdgeFeats  -> FeatureArgs -> IO ()
+performTrainingNormalFlow :: NormalFlowArguments -> PrepArgs -> FeatureArgs -> IO ()
 performTrainingNormalFlow (NormalFlowArguments {..}) PrepArgs{..} FeatureArgs{..} = do
 
     F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
@@ -536,7 +529,6 @@ performTrainingNormalFlow (NormalFlowArguments {..}) PrepArgs{..} FeatureArgs{..
       GraphvizModelFromFile modelFile -> do
           putStrLn "loading model"
           Just serializedModel <-  Data.Aeson.decode @(SomeModel SerializedCombinedFeature) <$> BSL.readFile modelFile
-          -- let SomeModel (model :: Model CombinedFeature ph) = fixFeatureNames (Just . unCombinedFeature)  serializedModel
           SomeModel model <- pure $ fixFeatureNames (Just . unCombinedFeature) serializedModel
 
           mkFeatureSpaces (modelFeatures model) $ \(F.FeatureMappingInto modelToCombinedFeatureVec) (fspaces :: FeatureSpaces entityPh edgePh) -> do
@@ -742,15 +734,57 @@ train includeCv fspaces allData qrel miniBatchParams outputFilePrefix modelFile 
 
 -- ----- RankLips Export ------------------------
 
-exportRankLipsTrainData :: FeatureSpaces entityPh edgePh
-      ->  TrainData CombinedFeature (F.Stack '[entityPh, edgePh])
-      -> [QRel.Entry CAR.RunFile.QueryId doc IsRelevant]
-      -> FilePath
-      -> FilePath
-      -> IO()
-exportRankLipsTrainData fspaces allData qrel outputFilePrefix modelFile =  do
+data RankLipsEdge = RankLipsEdge { rankLipsEdgeEntities :: [PageId], rankLipsParagraph :: Maybe ParagraphId} 
+instance Aeson.ToJSON RankLipsEdge  where
+    toJSON (RankLipsEdge{..} ) =
+      Aeson.object 
+       $ [ "entity" .= [ e | e <- rankLipsEdgeEntities] ]      
+      --  $ [ "entity" .= [ T.pack $ unpackPageId e | e <- rankLipsEdgeEntities] ]      
+       ++ case rankLipsParagraph of 
+             Just pid -> [ "paragraph" .=  pid ]
+             Nothing -> []
 
-  putStrLn "exportRankLipsTrainData"
+
+rankLipsExport :: NormalFlowArguments -> IO ()
+rankLipsExport args@(NormalFlowArguments {..})  = do
+    PrepArgs{..} <- prepareNormalFlow args
+    FeatureArgs{..} <- generateFeaturesNormalFlow args (PrepArgs{..})
+
+    F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
+    F.SomeFeatureSpace (allEdgeFSpace :: F.FeatureSpace EdgeFeature allEdgeFeats) <- pure edgeSomeFSpace
+
+    let
+            featureGraphs :: ML.Map QueryId (Graph PageId (EdgeFeatureVec allEdgeFeats))
+            featureGraphs = makeFeatureGraphs (allEdgeFSpace)
+
+            entries = [ (qid, RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}, fvec)
+              | (qid, graph) <- ML.toList featureGraphs 
+              , let (edges, nodes) = Graph.toEdgesAndSingletons graph
+              , (e1, e2, fvec) <- edges
+              ]
+
+            print fname =
+              T.unpack $ T.replace " " "_" $T.pack $ show fname
+            writeJsonL :: [(QueryId, RankLipsEdge, EdgeFeatureVec allEdgeFeats )]
+                        -> EdgeFeature
+                        -> IO()
+            writeJsonL entries fname = do
+                let filename = outputFilePrefix <.>(print fname)<.>"run"<.>"jsonl"
+                    fidx = fromMaybe (error $ "could not find feature name " <> show fname) 
+                         $ allEdgeFSpace  `F.lookupFeatureIndex ` fname
+                    runEntries = [TRun.RankingEntry { queryId = query 
+                                      , documentName = doc
+                                      , documentRank  = 1
+                                      , documentScore =  vec `F.lookupIndex` fidx
+                                      , methodName    = T.pack $ print fname
+                                      }
+                                  | (query, doc, vec) <- entries  
+                                  ]  
+                JRun.writeJsonLRunFile filename runEntries 
+
+
+
+    mapM_ (writeJsonL entries)  $ F.featureNames allEdgeFSpace
 
 -- --------------------------------------
 
