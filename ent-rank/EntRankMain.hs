@@ -120,13 +120,14 @@ data PosifyEdgeWeights = Exponentiate | ExpDenormWeight | Linear | Logistic | Cu
   deriving (Show, Read, Ord, Eq, Enum, Bounded)
 
 
-data FlowParser = NormalFlowArguments' NormalFlowArguments | FlowTrainOnly' FlowTrainOnly
+data FlowParser = NormalFlowArguments' NormalFlowArguments | FlowTrainOnly' FlowTrainOnly | ExportRankLips' FlowTrainOnly
 
 opts :: Parser (FlowParser)
 opts = commands <|> fmap NormalFlowArguments' normalArgs
   where
     commands = subparser
-      $ cmd "train-only" (fmap FlowTrainOnly' trainArgs)
+      $ cmd "rank-lips-export" (fmap FlowTrainOnly' trainArgs)
+      <> cmd "train-only" (fmap FlowTrainOnly' trainArgs)
       <> cmd "normal" (fmap NormalFlowArguments' normalArgs)
     cmd name action' = command name (info (helper <*> action') fullDesc)
 
@@ -269,11 +270,12 @@ m >!< key =
 main :: IO ()
 main = do
     hSetBuffering stdout LineBuffering
-    oneortheother <- execParser' 1 (helper <*> opts) mempty
-    case oneortheother of
+    selectedCommand <- execParser' 1 (helper <*> opts) mempty
+    case selectedCommand of
         NormalFlowArguments' args -> normalFlow args
         FlowTrainOnly' args -> trainOnlyFlow args
-
+        ExportRankLips' args -> rankLipsExport args
+ 
 
 data  FlowTrainOnly
     = FlowTrainOnly { qrelFile :: FilePath
@@ -297,7 +299,37 @@ trainOnlyFlow FlowTrainOnly {..} = do
     SerialisedTrainingData fspaces allData <- CBOR.deserialise <$> BSL.readFile (trainDataFileOpt)
     train True fspaces allData qrel miniBatchParams outputFilePrefix modelFile
 
+rankLipsExport :: FlowTrainOnly -> IO ()
+rankLipsExport FlowTrainOnly {..} = do
+    putStrLn $ " TrainDataFile : "++ (show trainDataFileOpt)
 
+    let fixQRel :: QRel.Entry QRel.QueryId QRel.DocumentName QRel.IsRelevant
+                -> QRel.Entry CAR.RunFile.QueryId QRel.DocumentName QRel.IsRelevant
+        fixQRel (QRel.Entry qid docId rel) = QRel.Entry (CAR.RunFile.QueryId qid) docId rel
+    qrel <- map fixQRel <$> QRel.readQRel @IsRelevant qrelFile
+
+    SerialisedTrainingData fspaces allData <- CBOR.deserialise <$> BSL.readFile (trainDataFileOpt)
+    -- train True fspaces allData qrel miniBatchParams outputFilePrefix modelFile
+    exportRankLipsTrainData fspaces allData qrel outputFilePrefix modelFile
+
+
+
+data PrepArgs allEntFeats allEdgeFeats = PrepArgs {
+  edgeDocsLookup :: EdgeDocsLookup
+  , pagesLookup :: AbstractLookup PageId
+  , aspectLookup :: AbstractLookup AspectId
+  , queries :: [QueryDoc]
+  , featureGraphSettings :: FeatureGraphSettings
+  , collapsedEdgedocRun  :: M.Map QueryId [MultiRankingEntry ParagraphId GridRun]
+  , collapsedAspectRun :: M.Map QueryId [MultiRankingEntry AspectId GridRun]
+  , collapsedEntityRun :: M.Map QueryId [MultiRankingEntry PageId GridRun]
+  , qrel :: [QRel.Entry CAR.RunFile.QueryId QRel.DocumentName QRel.IsRelevant]
+  , miniBatchParams :: MiniBatchParams
+}
+data FeatureArgs = FeatureArgs { 
+  makeFeatureGraphs :: forall edgeFSpace. F.FeatureSpace EdgeFeature edgeFSpace ->  ML.Map QueryId (Graph PageId (EdgeFeatureVec edgeFSpace))
+  , candidateGraphGenerator :: CandidateGraphGenerator
+}
 
 data NormalFlowArguments
     = NormalFlowArguments
@@ -323,14 +355,17 @@ data NormalFlowArguments
                        , graphVizTargetEntity :: Maybe PageId
                        }
 normalFlow :: NormalFlowArguments -> IO ()
-normalFlow NormalFlowArguments {..}  = do
+normalFlow args@(NormalFlowArguments {..})  = do
+    prepArgs <- prepareNormalFlow args
+    featureArgs <- generateFeaturesNormalFlow args prepArgs
+    performTrainingNormalFlow args prepArgs featureArgs
+
+
+prepareNormalFlow :: NormalFlowArguments -> IO (PrepArgs allEntFeats allEdgeFeats)
+prepareNormalFlow NormalFlowArguments {..}  = do
+
     putStrLn $ "# Pages: " ++ show articlesFile
     putStrLn $ "# Query restriction: " ++ show queryRestriction
-
-    F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
-    F.SomeFeatureSpace (allEdgeFSpace :: F.FeatureSpace EdgeFeature allEdgeFeats) <- pure edgeSomeFSpace
-    let allCombinedFSpace :: F.FeatureSpace CombinedFeature (F.Stack '[allEntFeats, allEdgeFeats])
-        allCombinedFSpace = F.eitherSpaces allEntFSpace allEdgeFSpace
 
     let entityRunFiles  = [ (g, r) | (g, Entity, r) <- gridRunFiles]
         aspectRunFiles  = [ (g, r) | (g, Aspect, r) <- gridRunFiles]
@@ -451,6 +486,11 @@ normalFlow NormalFlowArguments {..}  = do
     putStrLn $ "queries from collapsed entity runs: "++show (M.size collapsedEntityRun)
     putStrLn $ "queries from collapsed aspect runs: "++show (M.size collapsedAspectRun)
     putStrLn $ "queries from collapsed edge doc runs: "++show (M.size collapsedEdgedocRun)
+    return $ PrepArgs{..}
+
+generateFeaturesNormalFlow :: NormalFlowArguments -> PrepArgs allEntFeats allEdgeFeats -> IO (FeatureArgs)
+generateFeaturesNormalFlow (NormalFlowArguments {..}) PrepArgs{..} = do
+
 
     let candidateGraphGenerator :: CandidateGraphGenerator
         candidateGraphGenerator =
@@ -481,8 +521,14 @@ normalFlow NormalFlowArguments {..}  = do
                       edgeRun = collapsedEdgedocRun >!< query
                       entityRun = collapsedEntityRun >!< query
                       aspectRun = collapsedAspectRun >!< query
+    return $ FeatureArgs{..}
 
 
+performTrainingNormalFlow :: NormalFlowArguments -> PrepArgs allEntFeats allEdgeFeats  -> FeatureArgs -> IO ()
+performTrainingNormalFlow (NormalFlowArguments {..}) PrepArgs{..} FeatureArgs{..} = do
+
+    F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
+    F.SomeFeatureSpace (allEdgeFSpace :: F.FeatureSpace EdgeFeature allEdgeFeats) <- pure edgeSomeFSpace
 
 
     case modelSource of
@@ -576,7 +622,10 @@ normalFlow NormalFlowArguments {..}  = do
 
 
       TrainModel modelFile ->
-          let F.SomeFeatureSpace features = F.mkFeatureSpace
+          let allCombinedFSpace :: F.FeatureSpace CombinedFeature (F.Stack '[allEntFeats, allEdgeFeats])
+              allCombinedFSpace = F.eitherSpaces allEntFSpace allEdgeFSpace
+
+              F.SomeFeatureSpace features = F.mkFeatureSpace
                                             $ S.filter (filterFeaturesByExperimentSetting experimentSettings)
                                             $ F.featureNameSet allCombinedFSpace
           in mkFeatureSpaces features $ \_ fspaces -> do
@@ -687,14 +736,21 @@ train includeCv fspaces allData qrel miniBatchParams outputFilePrefix modelFile 
               putStrLn $ "Training Data = \n" ++ intercalate "\n" (take 10 $ displayTrainData $ force allData)
               gen0 <- newStdGen  -- needed by learning to rank
 
-              
-          --               Just serializedModel <-  Data.Aeson.decode @(SomeModel SerializedCombinedFeature) <$> BSL.readFile modelFile
-          -- let SomeModel model = fixFeatureNames (Just . unCombinedFeature)  serializedModel
-
               trainMe serializeFeature includeCv miniBatchParams (EvalCutoffAt 100) gen0 allData (combinedFSpace fspaces) metric outputFilePrefix modelFile
    where serializeFeature :: (CombinedFeature -> Maybe SerializedCombinedFeature)
          serializeFeature cf = Just $ SerializedCombinedFeature cf
 
+-- ----- RankLips Export ------------------------
+
+exportRankLipsTrainData :: FeatureSpaces entityPh edgePh
+      ->  TrainData CombinedFeature (F.Stack '[entityPh, edgePh])
+      -> [QRel.Entry CAR.RunFile.QueryId doc IsRelevant]
+      -> FilePath
+      -> FilePath
+      -> IO()
+exportRankLipsTrainData fspaces allData qrel outputFilePrefix modelFile =  do
+
+  putStrLn "exportRankLipsTrainData"
 
 -- --------------------------------------
 
