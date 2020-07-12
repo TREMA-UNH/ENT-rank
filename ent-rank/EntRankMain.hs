@@ -489,7 +489,10 @@ normalFlow NormalFlowArguments {..}  = do
 
       GraphvizModelFromFile modelFile -> do
           putStrLn "loading model"
-          Just (SomeModel model) <-  Data.Aeson.decode @(SomeModel CombinedFeature) <$> BSL.readFile modelFile
+          Just serializedModel <-  Data.Aeson.decode @(SomeModel SerializedCombinedFeature) <$> BSL.readFile modelFile
+          -- let SomeModel (model :: Model CombinedFeature ph) = fixFeatureNames (Just . unCombinedFeature)  serializedModel
+          SomeModel model <- pure $ fixFeatureNames (Just . unCombinedFeature) serializedModel
+
           mkFeatureSpaces (modelFeatures model) $ \(F.FeatureMappingInto modelToCombinedFeatureVec) (fspaces :: FeatureSpaces entityPh edgePh) -> do
               let
                   dotFileName :: QueryId -> FilePath
@@ -528,7 +531,10 @@ normalFlow NormalFlowArguments {..}  = do
 
 
       ModelFromFile modelFile -> do
-          Just (SomeModel model) <-  trace "loading model" $ Data.Aeson.decode @(SomeModel CombinedFeature) <$> BSL.readFile modelFile
+          Just serializedModel <-  trace "loading model" $ Data.Aeson.decode @(SomeModel SerializedCombinedFeature) <$> BSL.readFile modelFile
+          -- let SomeModel model = fixFeatureNames (Just . unCombinedFeature)  serializedModel
+          SomeModel model <- pure $ fixFeatureNames (Just . unCombinedFeature) serializedModel
+
           mkFeatureSpaces (modelFeatures model) $ \(F.FeatureMappingInto modelToCombinedFeatureVec) (fspaces :: FeatureSpaces entityPh edgePh) -> do
               case trainDataSource of
                   TrainDataFromFile trainDataFile -> do
@@ -680,8 +686,14 @@ train includeCv fspaces allData qrel miniBatchParams outputFilePrefix modelFile 
 
               putStrLn $ "Training Data = \n" ++ intercalate "\n" (take 10 $ displayTrainData $ force allData)
               gen0 <- newStdGen  -- needed by learning to rank
-              trainMe includeCv miniBatchParams (EvalCutoffAt 100) gen0 allData (combinedFSpace fspaces) metric outputFilePrefix modelFile
 
+              
+          --               Just serializedModel <-  Data.Aeson.decode @(SomeModel SerializedCombinedFeature) <$> BSL.readFile modelFile
+          -- let SomeModel model = fixFeatureNames (Just . unCombinedFeature)  serializedModel
+
+              trainMe serializeFeature includeCv miniBatchParams (EvalCutoffAt 100) gen0 allData (combinedFSpace fspaces) metric outputFilePrefix modelFile
+   where serializeFeature :: (CombinedFeature -> Maybe SerializedCombinedFeature)
+         serializeFeature cf = Just $ SerializedCombinedFeature cf
 
 
 -- --------------------------------------

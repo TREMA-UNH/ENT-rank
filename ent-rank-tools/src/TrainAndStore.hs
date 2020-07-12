@@ -48,6 +48,7 @@ import qualified Clone.RunFile as CAR.RunFile
 import qualified SimplIR.Format.QRel as QRel
 import qualified SimplIR.Ranking as Ranking
 import SimplIR.TrainUtils
+import qualified Data.Aeson as Aeson
 
 
 type Q = CAR.RunFile.QueryId
@@ -60,8 +61,9 @@ type FoldRestartResults f s = Folds (M.Map Q [(DocId, FeatureVec f s Double, Rel
 type BestFoldResults f s = Folds (M.Map Q [(DocId, FeatureVec f s Double, Rel)], (Model f s, Double))
 
 
-trainMe :: forall f s. (Ord f, Show f)
-        => Bool
+trainMe :: forall f s g s'. (Ord f, Show f, Show g, Ord g, Aeson.ToJSONKey g, Aeson.ToJSON g)
+        => (f -> Maybe g) 
+        -> Bool
         -> MiniBatchParams
         -> EvalCutoff
         -> StdGen
@@ -71,7 +73,7 @@ trainMe :: forall f s. (Ord f, Show f)
         -> FilePath
         -> FilePath
         -> IO ()
-trainMe includeCv miniBatchParams evalCutoff gen0 trainData fspace metric outputFilePrefix modelFile = do
+trainMe serializeFeature includeCv miniBatchParams evalCutoff gen0 trainData fspace metric outputFilePrefix modelFile = do
           -- train me!
           let nRestarts = 5
               nFolds = 5
@@ -89,7 +91,7 @@ trainMe includeCv miniBatchParams evalCutoff gen0 trainData fspace metric output
                   infoStr = show foldIdx
 
               foldRestartResults :: Folds (M.Map  Q [(DocId, FeatureVec f s Double, Rel)], [(Model f s, Double)])
-              foldRestartResults = kFolds trainFun trainData folds
+              foldRestartResults = trainKFolds trainFun trainData folds
 
               strat :: Strategy (Folds (a, [(Model f s, Double)]))
               strat = parTraversable (evalTuple2 r0 (parTraversable rdeepseq))
@@ -98,11 +100,11 @@ trainMe includeCv miniBatchParams evalCutoff gen0 trainData fspace metric output
           let fullRestarts = withStrategy (parTraversable rdeepseq)
                              $ take nRestarts $ trainWithRestarts miniBatchParams evalCutoff gen0 metric "full" fspace trainData
               (model, trainScore) =  bestModel $  fullRestarts
-              fullActions = dumpFullModelsAndRankings trainData (model, trainScore) metric outputFilePrefix modelFile
+              fullActions = dumpFullModelsAndRankings serializeFeature trainData (model, trainScore) metric outputFilePrefix modelFile
 
           if includeCv then do
               foldRestartResults' <- withStrategyIO strat foldRestartResults
-              let cvActions = dumpKFoldModelsAndRankings foldRestartResults' metric outputFilePrefix modelFile
+              let cvActions = dumpKFoldModelsAndRankings serializeFeature foldRestartResults' metric outputFilePrefix modelFile
               mapConcurrentlyL_ 24 id $ fullActions ++ cvActions
           else
               mapConcurrentlyL_ 24 id $ fullActions
@@ -163,13 +165,14 @@ bestRankingPerFold bestPerFold' =
 
 
 dumpKFoldModelsAndRankings
-    :: forall f s. (Ord f, Show f)
-    => FoldRestartResults f s
+    :: forall f s g s'. (Ord f, Show f, Show g, Ord g, Aeson.ToJSONKey g, Aeson.ToJSON g)
+    => (f -> Maybe g)
+    -> FoldRestartResults f s
     -> ScoringMetric IsRelevant CAR.RunFile.QueryId
     -> FilePath
     -> FilePath
     -> [IO ()]
-dumpKFoldModelsAndRankings foldRestartResults metric outputFilePrefix modelFile =
+dumpKFoldModelsAndRankings serializeFeature foldRestartResults metric outputFilePrefix modelFile =
     let bestPerFold' :: Folds (M.Map Q [(DocId, FeatureVec f s Double, Rel)], (Model f s, Double))
         bestPerFold' = bestPerFold foldRestartResults
 
@@ -193,7 +196,7 @@ dumpKFoldModelsAndRankings foldRestartResults metric outputFilePrefix modelFile 
 
         dumpBest =
             [ do storeRankingData outputFilePrefix ranking metric modelDesc
-                 storeModelData outputFilePrefix modelFile model trainScore modelDesc
+                 storeModelData serializeFeature outputFilePrefix modelFile model trainScore modelDesc
             | (foldNo, (testData,  ~(model, trainScore)))  <- zip [0 :: Integer ..]
                                                               $ toList bestPerFold'
             , let ranking = rerankRankings' model testData
@@ -208,18 +211,19 @@ dumpKFoldModelsAndRankings foldRestartResults metric outputFilePrefix modelFile 
 
 
 dumpFullModelsAndRankings
-    :: forall f s. (Ord f, Show f)
-    => M.Map Q [(DocId, FeatureVec f s Double, Rel)]
+    :: forall f s g . (Ord f, Show f, Show g, Ord g, Aeson.ToJSONKey g, Aeson.ToJSON g)
+    => (f -> Maybe g)
+    -> M.Map Q [(DocId, FeatureVec f s Double, Rel)]
     -> (Model f s, Double)
     -> ScoringMetric IsRelevant CAR.RunFile.QueryId
     -> FilePath
     -> FilePath
     -> [IO()]
-dumpFullModelsAndRankings trainData (model, trainScore) metric outputFilePrefix modelFile =
+dumpFullModelsAndRankings serializeFeature trainData (model, trainScore) metric outputFilePrefix modelFile =
     let modelDesc = "train"
         trainRanking = rerankRankings' model trainData
     in [ storeRankingData outputFilePrefix trainRanking metric modelDesc
-       , storeModelData outputFilePrefix modelFile model trainScore modelDesc
+       , storeModelData serializeFeature outputFilePrefix modelFile model trainScore modelDesc
        ]
 
 
@@ -242,17 +246,22 @@ l2rRankingToRankEntries methodName rankings =
 
 
 -- Train model on all data
-storeModelData :: (Show f, Ord f)
-               => FilePath
+storeModelData :: forall f g s. (Show f, Ord f, Show g, Ord g, Data.Aeson.ToJSONKey g, Data.Aeson.ToJSON g)
+               => (f -> Maybe g)
+               -> FilePath
                -> FilePath
                -> Model f s
                -> Double
                -> [Char]
                -> IO ()
-storeModelData outputFilePrefix modelFile model trainScore modelDesc = do
+storeModelData serializeFeature outputFilePrefix modelFile model trainScore modelDesc = do
   putStrLn $ "Model "++modelDesc++ " train metric "++ (show trainScore) ++ " MAP."
   let modelFile' = outputFilePrefix++modelFile++"-model-"++modelDesc++".json"
-  BSL.writeFile modelFile' $ Data.Aeson.encode model
+      --serializedModel :: Model g ph'
+    --   SomeModel (serializedModel :: Model g ph' ) = fixFeatureNames' (serializeFeature) model
+      serializedModel = fixFeatureNames' (serializeFeature) model
+
+  BSL.writeFile modelFile' $ Data.Aeson.encode serializedModel
   putStrLn $ "Written model "++modelDesc++ " to file "++ (show modelFile') ++ " ."
 
 storeRankingData ::  FilePath

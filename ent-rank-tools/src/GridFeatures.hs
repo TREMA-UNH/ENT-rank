@@ -46,6 +46,7 @@ import qualified Clone.RunFile as CAR.RunFile
 import MultiTrecRunFile
 
 import qualified Debug.Trace as Debug
+import qualified Data.Aeson as Aeson
 
 minibatchParser :: Parser MiniBatchParams
 minibatchParser = MiniBatchParams
@@ -81,13 +82,17 @@ gridRunParser = option (str >>= parseGridRunFile) (long "grid-run")
 -- -------------------------------------------
 
 data QueryModel = All | Title | SubTree | LeafHeading | Interior | SectionPath
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise, Hashable)
+        deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+        deriving anyclass (Hashable, Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 data RetrievalModel = Bm25 | Ql | Sdm
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise, Hashable)
+        deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+        deriving anyclass (Hashable, Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 data ExpansionModel = NoneX | Rm | Rm1 | EcmX | EcmRm | EcmPsg | EcmPsg1
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise, Hashable)
+        deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+        deriving anyclass (Hashable, Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 data IndexType = EcmIdx | EntityIdx | PageIdx | ParagraphIdx | AspectIdx
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise, Hashable)
+        deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+        deriving anyclass (Hashable, Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 
 entityRunsF :: [GridRun]
 entityRunsF = [ GridRun qm rm em it
@@ -137,13 +142,14 @@ aspectEdgeRunsF =  [ GridRun qm rm em it
 
 
 data GridRun = GridRun !QueryModel !RetrievalModel !ExpansionModel !IndexType
-         deriving (Show, Read, Ord, Eq, Generic, Serialise, Hashable)
-
+        deriving stock (Show, Read, Ord, Eq, Generic)
+        deriving anyclass (Hashable, Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 instance NFData GridRun where
     rnf x = x `seq` ()
 
 data Run = GridRun' GridRun | Aggr
-         deriving (Show, Read, Ord, Eq, Generic, Serialise)
+        deriving stock (Show, Read, Ord, Eq, Generic)
+        deriving anyclass (Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 
 allEntityRunsF :: [Run]
 allEntityRunsF = (GridRun' <$> entityRunsF) <> [Aggr]
@@ -155,11 +161,14 @@ aspectSources = [FromAspectsOwnerLink, FromAspectsLinkOwner, FromAspectsLinkLink
 allSources = pageSources <> paraSources <> aspectSources
 
 data RunFeature = ScoreF | RecipRankF | CountF --LinearRankF | BucketRankF
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise)
+         deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+         deriving anyclass (Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
+
 data FromSource = FromParas
                 | FromPagesOwnerLink | FromPagesLinkOwner | FromPagesLinkLink  | FromPagesSelf
                 | FromAspectsOwnerLink | FromAspectsLinkOwner | FromAspectsLinkLink  | FromAspectsSelf
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise)
+         deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+         deriving anyclass (Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 
 allRunFeatures :: [RunFeature]
 allRunFeatures = [ScoreF, RecipRankF, CountF] --[minBound..maxBound]
@@ -169,7 +178,8 @@ data EntityFeature where
 --     EntIncidentEdgeDocsRecip :: EntityFeature
 --     EntDegreeRecip :: EntityFeature
     EntDegree  :: EntityFeature
-    deriving (Show, Read, Ord, Eq, Generic, Serialise)
+        deriving stock (Show, Read, Ord, Eq, Generic)
+        deriving anyclass (Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 
 data EdgeFeature where
     EdgeRetrievalFeature :: !FromSource -> !Run -> !RunFeature -> EdgeFeature
@@ -178,12 +188,20 @@ data EdgeFeature where
     NeighborSourceScaleFeature :: !FromSource -> !EntityFeature -> EdgeFeature
 --     EdgeDocKL  :: !FromSource -> EdgeFeature
     EdgeCount  :: !FromSource -> EdgeFeature
-    deriving (Show, Read, Ord, Eq, Generic, Serialise)
+        deriving stock (Show, Read, Ord, Eq, Generic)
+        deriving anyclass (Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 
 data EntityOrEdge = Entity | Edge | Aspect
-         deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise)
+        --  deriving (Show, Read, Ord, Eq, Enum, Bounded, Generic, Serialise)
+        deriving stock (Show, Read, Ord, Eq, Enum, Bounded, Generic)
+        deriving anyclass (Hashable, Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
 
 type CombinedFeature = Either EntityFeature EdgeFeature
+        
+data SerializedCombinedFeature = SerializedCombinedFeature {unCombinedFeature:: CombinedFeature}
+        deriving stock (Show, Read, Ord, Eq, Generic)
+        deriving anyclass (Serialise, Aeson.ToJSON, Aeson.ToJSONKey, Aeson.FromJSON, Aeson.FromJSONKey)
+
 
 allEntityFeatures :: S.Set EntityFeature
 allEntityFeatures = S.fromList $
