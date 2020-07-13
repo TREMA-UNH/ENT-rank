@@ -1,9 +1,6 @@
 cradle:
   cabal:
-    - path: "vendor/pinch"
-      component: "lib:pinch"
-
-    - path: "ent-rank/src"
+    - path: "."
       component: "lib:ent-rank"
 
     - path: "ent-rank/.//EntRankMain.hs"
@@ -12,11 +9,12 @@ cradle:
     - path: "ent-rank/.//PageDocCorpusMain.hs"
       component: "ent-rank:exe:graph-expansion-page-doc"
 
-    - path: "ent-rank-tools/src"
-      component: "lib:ent-rank-tools"
 
     - path: "trec-car-tools-haskell/simplir/graph-algorithms/src"
       component: "lib:graph-algorithms"
+
+    - path: "trec-car-tools-haskell/simplir/simplir/src"
+      component: "lib:simplir"
 
     - path: "trec-car-tools-haskell/simplir/simplir/src"
       component: "lib:simplir"
@@ -129,6 +127,9 @@ cradle:
     - path: "trec-car-tools-haskell/simplir/vendor/fork-map/.//Test.hs"
       component: "fork-map:exe:fork-map-test"
 
+    - path: "trec-car-tools-haskell/simplir/vendor/html-parse/.//"
+      component: "html-parse:bench:ing"
+
     - path: "trec-car-tools-haskell/simplir/vendor/html-parse/./"
       component: "lib:html-parse"
 
@@ -173,3 +174,13 @@ cradle:
 
     - path: "trec-car-tools-haskell/trec-car-types/src"
       component: "lib:trec-car-types"
+
+    - path: "vendor/pinch/src"
+      component: "lib:pinch"
+
+    - path: "vendor/pinch/tests"
+      component: "pinch:test:pinch-spec"
+
+    
+
+      
