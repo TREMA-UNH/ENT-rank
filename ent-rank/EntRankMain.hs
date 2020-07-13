@@ -131,7 +131,7 @@ opts :: Parser (FlowParser)
 opts = commands <|> fmap NormalFlowArguments' normalArgs
   where
     commands = subparser
-      $ cmd "rank-lips-export" (fmap FlowTrainOnly' trainArgs)
+      $ cmd "rank-lips-export" (fmap NormalFlowArguments' normalArgs)
       <> cmd "train-only" (fmap FlowTrainOnly' trainArgs)
       <> cmd "normal" (fmap NormalFlowArguments' normalArgs)
     cmd name action' = command name (info (helper <*> action') fullDesc)
