@@ -707,11 +707,13 @@ train :: Bool
       -> FilePath
       -> IO()
 train includeCv fspaces allData qrel miniBatchParams outputFilePrefix modelFile =  do
+              putStrLn "train"
               let metric :: ScoringMetric IsRelevant CAR.RunFile.QueryId
                   !metric = meanAvgPrec (totalRelevantFromQRels qrel) Relevant
                   totalElems = getSum . foldMap ( Sum . length ) $ allData
                   totalPos = getSum . foldMap ( Sum . length . filter (\(_,_,rel) -> rel == Relevant)) $ allData
 
+              when (M.null allData) $ fail "No features could be created."
               putStrLn $ "Feature dimension: "++show (F.dimension $ F.featureSpace $ (\(_,a,_) -> a) $ head' $ snd $ M.elemAt 0 allData)
               putStrLn $ "Training model with (trainData) "++ show (M.size allData) ++
                         " queries and "++ show totalElems ++" items total of which "++
