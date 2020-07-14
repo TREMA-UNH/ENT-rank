@@ -83,6 +83,8 @@ import CandidateGraph
 import NodeAndEdgeFeatures
 import TrainAndStore
 
+import ExportFeatures
+
 import Debug.Trace  as Debug
 import qualified Data.Aeson as Aeson
 
@@ -749,6 +751,21 @@ instance Aeson.ToJSON RankLipsEdge  where
 
 rankLipsExport :: NormalFlowArguments -> IO ()
 rankLipsExport args@(NormalFlowArguments {..})  = do
+    PrepArgs{..} <- prepareNormalFlow args
+    FeatureArgs{..} <- generateFeaturesNormalFlow args (PrepArgs{..})
+
+    F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
+    F.SomeFeatureSpace (allEdgeFSpace :: F.FeatureSpace EdgeFeature allEdgeFeats) <- pure edgeSomeFSpace
+
+
+    let docFeatures = makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
+    -- let feats = makeExportFeatureVec
+
+    return ()
+
+
+rankLipsExportSlow :: NormalFlowArguments -> IO ()
+rankLipsExportSlow args@(NormalFlowArguments {..})  = do
     PrepArgs{..} <- prepareNormalFlow args
     FeatureArgs{..} <- generateFeaturesNormalFlow args (PrepArgs{..})
 

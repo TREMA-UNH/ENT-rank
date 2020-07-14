@@ -19,6 +19,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     CandidateGraph,
                        NodeAndEdgeFeatures,
+                       ExportFeatures,
                        LookupWrapper
   build-depends:       base,
                        async,
