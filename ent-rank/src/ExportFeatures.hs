@@ -90,26 +90,27 @@ makeExportFeatureVec ::
     -> M.Map CAR.RunFile.QueryId [MultiRankingEntry PageId GridRun]
     -> M.Map CAR.RunFile.QueryId [MultiRankingEntry ParagraphId GridRun]
     -> M.Map CAR.RunFile.QueryId [MultiRankingEntry AspectId GridRun]
-    -> ([(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
-                     [((PageId, PageId), EdgeFeature, Double)]))]
+    -> ([(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                     , [((PageId, PageId), EdgeFeature, Double)]
+                     , Candidates
+                    ))]
        )  
 makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun =
     withStrategy (parBuffer 200 rseq)
-      [ (query, computeEntityEdgeFeatures featureGraphSettings query pagesLookup aspectLookup candidates )
+      [ (query, (ent, edge, candidates))
       | (query, edgeRun) <- M.toList collapsedEdgedocRun
       , let entityRun = fromMaybe [] $ query `M.lookup` collapsedEntityRun
       , let aspectRun = fromMaybe [] $ query `M.lookup` collapsedAspectRun
       , let candidates = candidateGraphGenerator query edgeRun entityRun aspectRun
+      , let (ent,edge) = computeEntityEdgeFeatures featureGraphSettings query pagesLookup aspectLookup candidates
       ]
 
 
 
 printEntityFeatureName :: EntityFeature -> T.Text
 printEntityFeatureName (EntRetrievalFeature run runFeature) =
-    T.intercalate "_" ["EntRetrievalFeature", printWrap run, printWrap runFeature]
+    T.intercalate "_" ["EntRetrievalFeature", printRun run, printWrap runFeature]
 
---     EntIncidentEdgeDocsRecip :: EntityFeature
---     EntDegreeRecip :: EntityFeature
 printEntityFeatureName EntDegree =
     "EntDegree"
 
@@ -119,11 +120,9 @@ printEntityFeatureName fname =
     T.replace " " "_" $T.pack $ show fname
 
 printEdgeFeatureName :: EdgeFeature -> T.Text
--- printEdgeFeatureName fname =
-    -- T.replace " " "_" $T.pack $ show fname
 
 printEdgeFeatureName  (EdgeRetrievalFeature fromSource run runFeature) =
-    T.intercalate "_" ["EdgeRetrievalFeature", printWrap fromSource, printWrap run, printWrap runFeature]
+    T.intercalate "_" ["EdgeRetrievalFeature", printWrap fromSource, printRun run, printWrap runFeature]
 
 printEdgeFeatureName  (NeighborFeature entityFeature) =
     T.intercalate "_" ["NeighborFeature", printEntityFeatureName entityFeature]
@@ -141,4 +140,10 @@ printEdgeFeatureName (EdgeCount fromSource) =
 
 printWrap :: Show a => a -> T.Text
 printWrap fname =
-  T.replace " " "_" $T.pack $ show fname
+  T.replace " " "_" $ T.pack $ show fname
+
+
+printRun :: Run -> T.Text
+printRun Aggr = "Aggr"
+printRun (GridRun' (GridRun queryModel retrievalModel expansionModel indexType)) =
+    T.intercalate "-" ["GridRun", printWrap queryModel, printWrap retrievalModel, printWrap expansionModel, printWrap indexType]

@@ -755,18 +755,70 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
     FeatureArgs{..} <- generateFeaturesNormalFlow args (PrepArgs{..})
 
     let docFeatures ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
-                                    [((PageId, PageId), EdgeFeature, Double)])
+                                    [((PageId, PageId), EdgeFeature, Double)]
+                                    , Candidates )
                         )]
         docFeatures = makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
 
         
+    exportEdgeDocsAssocs docFeatures
+    exportPairAssocs docFeatures
     mapM_ (exportEntity docFeatures ) allEntityFeatures
     mapM_ (exportEdge docFeatures ) allEdgeFeatures
 
 
 
-  where exportEntity ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
-                                    [((PageId, PageId), EdgeFeature, Double)])
+
+  where exportEdgeDocsAssocs ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                                    , [((PageId, PageId), EdgeFeature, Double)]
+                                    , Candidates)
+                        )] -> IO()
+        exportEdgeDocsAssocs entries = do
+                let filename = outputFilePrefix <.>"edgedoc.assocs"<.>"jsonl"
+                    runEntries = [TRun.RankingEntry { queryId = query 
+                                      , documentName = edgeDocName (HS.toList edgeDocNeighbors) edgeDocArticleId edgeDocParagraphId
+                                      , documentRank  = 1
+                                      , documentScore =  1.0
+                                      , methodName    = "edgedoc-assocs"
+                                      }
+                                  | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
+                                  , EdgeDoc {..} <- edgeDocs  
+                                  ]  
+                JRun.writeJsonLRunFile filename runEntries 
+        exportPairAssocs ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                                    , [((PageId, PageId), EdgeFeature, Double)]
+                                    , Candidates)
+                        )] -> IO()
+        exportPairAssocs entries = do
+                let filename = outputFilePrefix <.>"pairs.assocs"<.>"jsonl"
+                    runEntries = [TRun.RankingEntry { queryId = query 
+                                      , documentName = edgeName e1 e2
+                                      , documentRank  = 1
+                                      , documentScore =  1.0
+                                      , methodName    = "edge-assocs"
+                                      }
+                                  | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
+                                  , [e1,e2] <- allEntityPairs edgeDocs  
+                                  ]  
+                JRun.writeJsonLRunFile filename runEntries 
+
+        allEntityPairs :: [EdgeDoc] -> [[PageId]]
+        allEntityPairs edgeDocs =
+                  fmap ( HS.toList)
+                  $ HS.toList
+                  $ HS.fromList
+                  $ [ HS.fromList [e1,e2]
+                    |  EdgeDoc {edgeDocNeighbors = entitySet} <- edgeDocs 
+                    , let entities = HS.toList entitySet
+                    , e1 <- entities
+                    , e2 <- entities
+                    , e1 /= e2
+                    ]
+
+
+        exportEntity ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                                    , [((PageId, PageId), EdgeFeature, Double)]
+                                    , Candidates)
                         )] -> EntityFeature -> IO()
         exportEntity entries fname = do
                 let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"
@@ -776,14 +828,15 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                       , documentScore =  featScore
                                       , methodName    = printEntityFeatureName fname
                                       }
-                                  | (query, (entityFeatMap, _)) <- entries
+                                  | (query, (entityFeatMap, _, _)) <- entries
                                   , (entityId, flist) <- HM.toList entityFeatMap  
                                   , (_, featScore) <- filter (\(name,_score) -> name == fname) flist 
                                   ]  
                 JRun.writeJsonLRunFile filename runEntries 
 
-        exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
-                                    [((PageId, PageId), EdgeFeature, Double)])
+        exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                                    , [((PageId, PageId), EdgeFeature, Double)]
+                                    , Candidates)
                         )] -> EdgeFeature -> IO()
         exportEdge entries fname = do
                 let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
@@ -793,7 +846,7 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                       , documentScore =  featScore
                                       , methodName    = printEdgeFeatureName fname
                                       }
-                                  | (query, (_, edgeFeatList)) <- entries
+                                  | (query, (_, edgeFeatList, _)) <- entries
                                   , ((e1,e2), fname', featScore) <- edgeFeatList  
                                   ,  fname' == fname
                                   ]  
@@ -802,6 +855,7 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                 
         edgeName e1 e2 = RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}
         entityName e1 = RankLipsEdge{ rankLipsEdgeEntities = [e1], rankLipsParagraph = Nothing}
+        edgeDocName entities _owner para  = RankLipsEdge{ rankLipsEdgeEntities = entities, rankLipsParagraph = Just para}
 
 
 rankLipsExportSlow :: NormalFlowArguments -> IO ()
