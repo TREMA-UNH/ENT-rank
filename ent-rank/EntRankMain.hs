@@ -739,11 +739,11 @@ train includeCv fspaces allData qrel miniBatchParams outputFilePrefix modelFile 
 -- ----- RankLips Export ------------------------
 
 data RankLipsEdge = RankLipsEdge { rankLipsEdgeEntities :: [PageId], rankLipsParagraph :: Maybe ParagraphId} 
+
 instance Aeson.ToJSON RankLipsEdge  where
     toJSON (RankLipsEdge{..} ) =
       Aeson.object 
        $ [ "entity" .= [ e | e <- rankLipsEdgeEntities] ]      
-      --  $ [ "entity" .= [ T.pack $ unpackPageId e | e <- rankLipsEdgeEntities] ]      
        ++ case rankLipsParagraph of 
              Just pid -> [ "paragraph" .=  pid ]
              Nothing -> []
@@ -754,14 +754,54 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
     PrepArgs{..} <- prepareNormalFlow args
     FeatureArgs{..} <- generateFeaturesNormalFlow args (PrepArgs{..})
 
-    F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
-    F.SomeFeatureSpace (allEdgeFSpace :: F.FeatureSpace EdgeFeature allEdgeFeats) <- pure edgeSomeFSpace
+    let docFeatures ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
+                                    [((PageId, PageId), EdgeFeature, Double)])
+                        )]
+        docFeatures = makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
+
+        
+    mapM_ (exportEntity docFeatures ) allEntityFeatures
+    mapM_ (exportEdge docFeatures ) allEdgeFeatures
 
 
-    let docFeatures = makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
-    -- let feats = makeExportFeatureVec
 
-    return ()
+  where exportEntity ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
+                                    [((PageId, PageId), EdgeFeature, Double)])
+                        )] -> EntityFeature -> IO()
+        exportEntity entries fname = do
+                let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"
+                    runEntries = [TRun.RankingEntry { queryId = query 
+                                      , documentName = entityName entityId 
+                                      , documentRank  = 1
+                                      , documentScore =  featScore
+                                      , methodName    = printEntityFeatureName fname
+                                      }
+                                  | (query, (entityFeatMap, _)) <- entries
+                                  , (entityId, flist) <- HM.toList entityFeatMap  
+                                  , (_, featScore) <- filter (\(name,_score) -> name == fname) flist 
+                                  ]  
+                JRun.writeJsonLRunFile filename runEntries 
+
+        exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)],
+                                    [((PageId, PageId), EdgeFeature, Double)])
+                        )] -> EdgeFeature -> IO()
+        exportEdge entries fname = do
+                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
+                    runEntries = [TRun.RankingEntry { queryId = query 
+                                      , documentName = edgeName e1 e2 
+                                      , documentRank  = 1
+                                      , documentScore =  featScore
+                                      , methodName    = printEdgeFeatureName fname
+                                      }
+                                  | (query, (_, edgeFeatList)) <- entries
+                                  , ((e1,e2), fname', featScore) <- edgeFeatList  
+                                  ,  fname' == fname
+                                  ]  
+                JRun.writeJsonLRunFile filename runEntries 
+
+                
+        edgeName e1 e2 = RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}
+        entityName e1 = RankLipsEdge{ rankLipsEdgeEntities = [e1], rankLipsParagraph = Nothing}
 
 
 rankLipsExportSlow :: NormalFlowArguments -> IO ()
@@ -782,20 +822,18 @@ rankLipsExportSlow args@(NormalFlowArguments {..})  = do
               , (e1, e2, fvec) <- edges
               ]
 
-            print fname =
-              T.unpack $ T.replace " " "_" $T.pack $ show fname
             writeJsonL :: [(QueryId, RankLipsEdge, EdgeFeatureVec allEdgeFeats )]
                         -> EdgeFeature
                         -> IO()
             writeJsonL entries fname = do
-                let filename = outputFilePrefix <.>(print fname)<.>"run"<.>"jsonl"
+                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
                     fidx = fromMaybe (error $ "could not find feature name " <> show fname) 
                          $ allEdgeFSpace  `F.lookupFeatureIndex ` fname
                     runEntries = [TRun.RankingEntry { queryId = query 
                                       , documentName = doc
                                       , documentRank  = 1
                                       , documentScore =  vec `F.lookupIndex` fidx
-                                      , methodName    = T.pack $ print fname
+                                      , methodName    = printEdgeFeatureName fname
                                       }
                                   | (query, doc, vec) <- entries  
                                   ]  
