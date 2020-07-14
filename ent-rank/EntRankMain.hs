@@ -763,8 +763,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
         
     exportEdgeDocsAssocs docFeatures
     exportPairAssocs docFeatures
-    mapM_ (exportEntity docFeatures ) allEntityFeatures
-    mapM_ (exportEdge docFeatures ) allEdgeFeatures
+    mapConcurrentlyL_ 20 (exportEntity docFeatures ) allEntityFeatures
+    mapConcurrentlyL_ 20 (exportEdge docFeatures ) allEdgeFeatures
 
 
 
