@@ -763,8 +763,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
         
     exportEdgeDocsAssocs docFeatures
     exportPairAssocs docFeatures
-    mapConcurrentlyL_ 20 (exportEntity docFeatures ) allEntityFeatures
-    mapConcurrentlyL_ 20 (exportEdge docFeatures ) allEdgeFeatures
+    exportEntity docFeatures
+    exportEdge docFeatures
 
 
 
@@ -821,40 +821,50 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
         exportEntity ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
                                     , [((PageId, PageId), EdgeFeature, Double)]
                                     , Candidates)
-                        )] -> EntityFeature -> IO()
-        exportEntity entries fname = do
-                let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"
-                    runEntries = [TRun.RankingEntry { queryId = query 
+                        )] -> IO()
+        exportEntity entries = do
+                let runEntries = M.fromListWith (<>)
+                                  [(fname',
+                                    [ TRun.RankingEntry { queryId = query 
                                       , documentName = entityName entityId 
                                       , documentRank  = 1
                                       , documentScore =  featScore
-                                      , methodName    = printEntityFeatureName fname
-                                      }
+                                      , methodName    = printEntityFeatureName fname'
+                                      } ]
+                                   )
                                   | (query, (entityFeatMap, _, _)) <- entries
                                   , (entityId, flist) <- HM.toList entityFeatMap  
-                                  , (_, featScore) <- filter (\(name,_score) -> name == fname) flist 
+                                  , (fname', featScore) <-  flist -- filter (\(name,_score) -> fname' == fname) flist 
                                   ]  
-                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
-                when (null runEntries) $ putStrLn $ ("No entries for entity feature "<> (T.unpack $ printEntityFeatureName fname))
+                mapConcurrentlyL_ 20 exportEntityFile $ M.toList runEntries
+              where exportEntityFile (fname, runEntries) = do 
+                      let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"
+
+                      when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                      when (null runEntries) $ putStrLn $ ("No entries for entity feature "<> (T.unpack $ printEntityFeatureName fname))
 
         exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
                                     , [((PageId, PageId), EdgeFeature, Double)]
                                     , Candidates)
-                        )] -> EdgeFeature -> IO()
-        exportEdge entries fname = do
-                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
-                    runEntries = [TRun.RankingEntry { queryId = query 
+                        )]  -> IO()
+        exportEdge entries  = do
+                let runEntries =  M.fromListWith (<>)
+                                  [ (fname', 
+                                     [TRun.RankingEntry { queryId = query 
                                       , documentName = edgeName e1 e2 
                                       , documentRank  = 1
                                       , documentScore =  featScore
-                                      , methodName    = printEdgeFeatureName fname
-                                      }
+                                      , methodName    = printEdgeFeatureName fname'
+                                      }]
+                                     )
                                   | (query, (_, edgeFeatList, _)) <- entries
                                   , ((e1,e2), fname', featScore) <- edgeFeatList  
-                                  ,  fname' == fname
                                   ]  
-                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
-                when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
+                mapConcurrentlyL_ 20 exportEdgeFile $ M.toList runEntries
+              where exportEdgeFile (fname, runEntries) = do
+                      let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
+                      when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                      when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
 
                 
         edgeName e1 e2 = RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}
