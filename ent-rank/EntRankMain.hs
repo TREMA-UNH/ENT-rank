@@ -784,7 +784,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
                                   , EdgeDoc {..} <- edgeDocs  
                                   ]  
-                JRun.writeJsonLRunFile filename runEntries 
+                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                when (null runEntries) $ putStrLn "No entries for edgedoc-assocs"
         exportPairAssocs ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
                                     , [((PageId, PageId), EdgeFeature, Double)]
                                     , Candidates)
@@ -800,7 +801,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
                                   , [e1,e2] <- allEntityPairs edgeDocs  
                                   ]  
-                JRun.writeJsonLRunFile filename runEntries 
+                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                when (null runEntries) $ putStrLn "No entries for pair-assocs"
 
         allEntityPairs :: [EdgeDoc] -> [[PageId]]
         allEntityPairs edgeDocs =
@@ -832,7 +834,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   , (entityId, flist) <- HM.toList entityFeatMap  
                                   , (_, featScore) <- filter (\(name,_score) -> name == fname) flist 
                                   ]  
-                JRun.writeJsonLRunFile filename runEntries 
+                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                when (null runEntries) $ putStrLn $ ("No entries for entity feature "<> (T.unpack $ printEntityFeatureName fname))
 
         exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
                                     , [((PageId, PageId), EdgeFeature, Double)]
@@ -850,7 +853,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   , ((e1,e2), fname', featScore) <- edgeFeatList  
                                   ,  fname' == fname
                                   ]  
-                JRun.writeJsonLRunFile filename runEntries 
+                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
 
                 
         edgeName e1 e2 = RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}
