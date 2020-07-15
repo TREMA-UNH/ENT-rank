@@ -65,8 +65,6 @@ import SimplIR.Intern
 
 import qualified Clone.RunFile as CAR.RunFile
 import qualified SimplIR.Format.QRel as QRel
-import qualified SimplIR.Format.TrecRunFile as TRun
-import qualified SimplIR.Format.JsonRunQrels as JRun
 import MultiTrecRunFile
 import Graph
 
@@ -86,7 +84,6 @@ import TrainAndStore
 import ExportFeatures
 
 import Debug.Trace  as Debug
-import qualified Data.Aeson as Aeson
 
 type NumResults = Int
 
@@ -738,16 +735,6 @@ train includeCv fspaces allData qrel miniBatchParams outputFilePrefix modelFile 
 
 -- ----- RankLips Export ------------------------
 
-data RankLipsEdge = RankLipsEdge { rankLipsEdgeEntities :: [PageId], rankLipsParagraph :: Maybe ParagraphId} 
-
-instance Aeson.ToJSON RankLipsEdge  where
-    toJSON (RankLipsEdge{..} ) =
-      Aeson.object 
-       $ [ "entity" .= [ e | e <- rankLipsEdgeEntities] ]      
-       ++ case rankLipsParagraph of 
-             Just pid -> [ "paragraph" .=  pid ]
-             Nothing -> []
-
 
 rankLipsExport :: NormalFlowArguments -> IO ()
 rankLipsExport args@(NormalFlowArguments {..})  = do
@@ -761,155 +748,13 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
         docFeatures = makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
 
         
-    exportEdgeDocsAssocs docFeatures
-    exportPairAssocs docFeatures
-    exportEntity docFeatures
-    exportEdge docFeatures
+    exportEdgeDocsAssocs outputFilePrefix docFeatures
+    exportPairAssocs outputFilePrefix docFeatures
+    exportEntity outputFilePrefix docFeatures
+    exportEdge outputFilePrefix docFeatures
 
 
 
-
-  where exportEdgeDocsAssocs ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
-                                    , [((PageId, PageId), EdgeFeature, Double)]
-                                    , Candidates)
-                        )] -> IO()
-        exportEdgeDocsAssocs entries = do
-                let filename = outputFilePrefix <.>"edgedoc.assocs"<.>"jsonl"<.>"gz"
-                    runEntries = [TRun.RankingEntry { queryId = query 
-                                      , documentName = edgeDocName (HS.toList edgeDocNeighbors) edgeDocArticleId edgeDocParagraphId
-                                      , documentRank  = 1
-                                      , documentScore =  1.0
-                                      , methodName    = "edgedoc-assocs"
-                                      }
-                                  | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
-                                  , EdgeDoc {..} <- edgeDocs  
-                                  ]  
-                when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
-                when (null runEntries) $ putStrLn "No entries for edgedoc-assocs"
-        exportPairAssocs ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
-                                    , [((PageId, PageId), EdgeFeature, Double)]
-                                    , Candidates)
-                        )] -> IO()
-        exportPairAssocs entries = do
-                let filename = outputFilePrefix <.>"pairs.assocs"<.>"jsonl"<.>"gz"
-                    runEntries = [TRun.RankingEntry { queryId = query 
-                                      , documentName = edgeName e1 e2
-                                      , documentRank  = 1
-                                      , documentScore =  1.0
-                                      , methodName    = "edge-assocs"
-                                      }
-                                  | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
-                                  , [e1,e2] <- allEntityPairs edgeDocs  
-                                  ]  
-                when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
-                when (null runEntries) $ putStrLn "No entries for pair-assocs"
-
-        allEntityPairs :: [EdgeDoc] -> [[PageId]]
-        allEntityPairs edgeDocs =
-                  fmap ( HS.toList)
-                  $ HS.toList
-                  $ HS.fromList
-                  $ [ HS.fromList [e1,e2]
-                    |  EdgeDoc {edgeDocNeighbors = entitySet} <- edgeDocs 
-                    , let entities = HS.toList entitySet
-                    , e1 <- entities
-                    , e2 <- entities
-                    , e1 /= e2
-                    ]
-
-
-        exportEntity ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
-                                    , [((PageId, PageId), EdgeFeature, Double)]
-                                    , Candidates)
-                        )] -> IO()
-        exportEntity entries = do
-                let runEntries = M.fromListWith (<>)
-                                  [(fname',
-                                    [ TRun.RankingEntry { queryId = query 
-                                      , documentName = entityName entityId 
-                                      , documentRank  = 1
-                                      , documentScore =  featScore
-                                      , methodName    = printEntityFeatureName fname'
-                                      } ]
-                                   )
-                                  | (query, (entityFeatMap, _, _)) <- entries
-                                  , (entityId, flist) <- HM.toList entityFeatMap  
-                                  , (fname', featScore) <-  flist -- filter (\(name,_score) -> fname' == fname) flist 
-                                  ]  
-                mapConcurrentlyL_ 20 exportEntityFile $ M.toList runEntries
-              where exportEntityFile (fname, runEntries) = do 
-                      let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
-
-                      when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
-                      when (null runEntries) $ putStrLn $ ("No entries for entity feature "<> (T.unpack $ printEntityFeatureName fname))
-
-        exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
-                                    , [((PageId, PageId), EdgeFeature, Double)]
-                                    , Candidates)
-                        )]  -> IO()
-        exportEdge entries  = do
-                let runEntries =  M.fromListWith (<>)
-                                  [ (fname', 
-                                     [TRun.RankingEntry { queryId = query 
-                                      , documentName = edgeName e1 e2 
-                                      , documentRank  = 1
-                                      , documentScore =  featScore
-                                      , methodName    = printEdgeFeatureName fname'
-                                      }]
-                                     )
-                                  | (query, (_, edgeFeatList, _)) <- entries
-                                  , ((e1,e2), fname', featScore) <- edgeFeatList  
-                                  ]  
-                mapConcurrentlyL_ 20 exportEdgeFile $ M.toList runEntries
-              where exportEdgeFile (fname, runEntries) = do
-                      let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
-                      when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
-                      when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
-
-                
-        edgeName e1 e2 = RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}
-        entityName e1 = RankLipsEdge{ rankLipsEdgeEntities = [e1], rankLipsParagraph = Nothing}
-        edgeDocName entities _owner para  = RankLipsEdge{ rankLipsEdgeEntities = entities, rankLipsParagraph = Just para}
-
-
-rankLipsExportSlow :: NormalFlowArguments -> IO ()
-rankLipsExportSlow args@(NormalFlowArguments {..})  = do
-    PrepArgs{..} <- prepareNormalFlow args
-    FeatureArgs{..} <- generateFeaturesNormalFlow args (PrepArgs{..})
-
-    F.SomeFeatureSpace (allEntFSpace :: F.FeatureSpace EntityFeature allEntFeats) <- pure entSomeFSpace
-    F.SomeFeatureSpace (allEdgeFSpace :: F.FeatureSpace EdgeFeature allEdgeFeats) <- pure edgeSomeFSpace
-
-    let
-            featureGraphs :: ML.Map QueryId (Graph PageId (EdgeFeatureVec allEdgeFeats))
-            featureGraphs = makeFeatureGraphs (allEdgeFSpace)
-
-            entries = [ (qid, RankLipsEdge{ rankLipsEdgeEntities = [e1,e2], rankLipsParagraph = Nothing}, fvec)
-              | (qid, graph) <- ML.toList featureGraphs 
-              , let (edges, nodes) = Graph.toEdgesAndSingletons graph
-              , (e1, e2, fvec) <- edges
-              ]
-
-            writeJsonL :: [(QueryId, RankLipsEdge, EdgeFeatureVec allEdgeFeats )]
-                        -> EdgeFeature
-                        -> IO()
-            writeJsonL entries fname = do
-                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
-                    fidx = fromMaybe (error $ "could not find feature name " <> show fname) 
-                         $ allEdgeFSpace  `F.lookupFeatureIndex ` fname
-                    runEntries = [TRun.RankingEntry { queryId = query 
-                                      , documentName = doc
-                                      , documentRank  = 1
-                                      , documentScore =  vec `F.lookupIndex` fidx
-                                      , methodName    = printEdgeFeatureName fname
-                                      }
-                                  | (query, doc, vec) <- entries  
-                                  ]  
-                JRun.writeGzJsonLRunFile filename runEntries 
-
-
-
-    mapM_ (writeJsonL entries)  $ F.featureNames allEdgeFSpace
 
 -- --------------------------------------
 

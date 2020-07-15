@@ -12,37 +12,44 @@
 
 module ExportFeatures where
 
-
-import Debug.Trace
-
 import Control.Parallel.Strategies
 
-import Data.Functor.Identity
-import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified Data.Text as T
 import Data.Maybe
-import Data.Foldable  as Foldable
-import qualified Data.List.NonEmpty as NE
-import Data.Bifunctor
-import Control.Monad.ST
-import GHC.Stack
-import qualified Control.Foldl as F
+import System.FilePath
+import qualified Data.Aeson as Aeson
+import Data.Aeson.Types
+import Control.Monad
+
+import qualified Data.Set as S
+import qualified Data.Map.Strict as M
+import qualified Data.Map.Lazy as ML
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Text as T
+import qualified Text.PrettyPrint.Leijen.Text as PP
+import Data.List
+import Data.Maybe
+import Data.Foldable as Foldable
+import Data.Hashable
+
+
 
 import CAR.Types hiding (Entity)
 import AspectUtils
 import GridFeatures
 
--- import GraphExpansion
-import qualified SimplIR.FeatureSpace as F
-import SimplIR.FeatureSpace.Normalise
-
+import Control.Concurrent
+import Control.Concurrent.Map
 import qualified Clone.RunFile as CAR.RunFile
-import qualified SimplIR.Format.QRel as QRel
 import MultiTrecRunFile
-import Graph
+import qualified SimplIR.Format.TrecRunFile as TRun
+import qualified SimplIR.Format.JsonRunQrels as JRun
+
 
 import EdgeDocCorpus
 import LookupWrapper
@@ -52,7 +59,7 @@ import Debug.Trace as Debug
 import NodeAndEdgeFeatures
 
 -- ---
-import CAR.Retrieve  as Retrieve
+-- import CAR.Retrieve  as Retrieve
 
 -- | merge entity and edge features
 computeEntityEdgeFeatures
@@ -147,3 +154,143 @@ printRun :: Run -> T.Text
 printRun Aggr = "Aggr"
 printRun (GridRun' (GridRun queryModel retrievalModel expansionModel indexType)) =
     T.intercalate "-" ["GridRun", printWrap queryModel, printWrap retrievalModel, printWrap expansionModel, printWrap indexType]
+
+
+
+
+data RankLipsEdge = RankLipsEdge { rankLipsTargetEntity :: Maybe PageId
+                                 , rankLipsEdgeEntities :: [PageId]
+                                 , rankLipsParagraph :: Maybe ParagraphId
+                                 }
+emptyRankLipsEdge :: RankLipsEdge
+emptyRankLipsEdge = RankLipsEdge { rankLipsTargetEntity = Nothing
+                                 , rankLipsEdgeEntities = []
+                                 , rankLipsParagraph = Nothing
+                                 }
+
+instance Aeson.ToJSON RankLipsEdge  where
+    toJSON (RankLipsEdge{..} ) =
+      Aeson.object 
+       $ [ "entity" .= [ e | e <- rankLipsEdgeEntities] ]      
+       ++ case rankLipsParagraph of 
+             Just pid -> [ "paragraph" .=  pid ]
+             Nothing -> []
+
+
+
+exportEdgeDocsAssocs :: FilePath 
+                     -> [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                            , [((PageId, PageId), EdgeFeature, Double)]
+                            , Candidates)
+                        )] 
+                     -> IO()
+exportEdgeDocsAssocs outputFilePrefix entries = do
+        let filename = outputFilePrefix <.>"edgedoc.assocs"<.>"jsonl"<.>"gz"
+            runEntries = [TRun.RankingEntry { queryId = query 
+                                , documentName = edgeDocName targetEntity otherEntities edgeDocArticleId edgeDocParagraphId
+                                , documentRank  = 1
+                                , documentScore =  1.0
+                                , methodName    = "edgedoc-assocs"
+                                }
+                            | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
+                            , EdgeDoc {..} <- edgeDocs  
+                            , targetEntity <- HS.toList edgeDocNeighbors
+                            , let otherEntities = filter ( /= targetEntity ) $ HS.toList edgeDocNeighbors
+                            ]  
+        when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
+        when (null runEntries) $ putStrLn "No entries for edgedoc-assocs"
+exportPairAssocs ::   FilePath 
+                     -> [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                            , [((PageId, PageId), EdgeFeature, Double)]
+                            , Candidates)
+                         )] 
+                    -> IO()
+exportPairAssocs outputFilePrefix entries = do
+        let filename = outputFilePrefix <.>"pairs.assocs"<.>"jsonl"<.>"gz"
+            runEntries = [TRun.RankingEntry { queryId = query 
+                                , documentName = edgeName e1 e2
+                                , documentRank  = 1
+                                , documentScore =  1.0
+                                , methodName    = "edge-assocs"
+                                }
+                            | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
+                            , [e1,e2] <- allEntityPairs edgeDocs  
+                            ]  
+        when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
+        when (null runEntries) $ putStrLn "No entries for pair-assocs"
+
+allEntityPairs :: [EdgeDoc] -> [[PageId]]
+allEntityPairs edgeDocs =
+            fmap ( HS.toList)
+            $ HS.toList
+            $ HS.fromList
+            $ [ HS.fromList [e1,e2]
+            |  EdgeDoc {edgeDocNeighbors = entitySet} <- edgeDocs 
+            , let entities = HS.toList entitySet
+            , e1 <- entities
+            , e2 <- entities
+            , e1 /= e2
+            ]
+
+
+exportEntity ::  FilePath 
+               ->  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                            , [((PageId, PageId), EdgeFeature, Double)]
+                            , Candidates)
+                )]
+              -> IO()
+exportEntity outputFilePrefix entries = do
+        let runEntries = M.fromListWith (<>)
+                            [(fname',
+                            [ TRun.RankingEntry { queryId = query 
+                                , documentName = entityName entityId 
+                                , documentRank  = 1
+                                , documentScore =  featScore
+                                , methodName    = printEntityFeatureName fname'
+                                } 
+                            ]
+                            )
+                            | (query, (entityFeatMap, _, _)) <- entries
+                            , (entityId, flist) <- HM.toList entityFeatMap  
+                            , (fname', featScore) <-  flist -- filter (\(name,_score) -> fname' == fname) flist 
+                            ]  
+        mapConcurrentlyL_ 20 exportEntityFile $ M.toList runEntries
+        where exportEntityFile (fname, runEntries) = do 
+                let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
+
+                when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
+                when (null runEntries) $ putStrLn $ ("No entries for entity feature "<> (T.unpack $ printEntityFeatureName fname))
+
+exportEdge ::  FilePath 
+            ->  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                            , [((PageId, PageId), EdgeFeature, Double)]
+                            , Candidates)
+                )]  
+            -> IO()
+exportEdge outputFilePrefix entries  = do
+        let runEntries =  M.fromListWith (<>)
+                            [ (fname', 
+                                [TRun.RankingEntry { queryId = query 
+                                , documentName = edgeName e1 e2 
+                                , documentRank  = 1
+                                , documentScore =  featScore
+                                , methodName    = printEdgeFeatureName fname'
+                                }]
+                                )
+                            | (query, (_, edgeFeatList, _)) <- entries
+                            , ((e1,e2), fname', featScore) <- edgeFeatList  
+                            ]  
+        mapConcurrentlyL_ 20 exportEdgeFile $ M.toList runEntries
+        where exportEdgeFile (fname, runEntries) = do
+                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
+                when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
+                when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
+
+        
+edgeName e1 e2 = emptyRankLipsEdge { rankLipsEdgeEntities = [e1,e2]}
+entityName e1 = emptyRankLipsEdge{ rankLipsEdgeEntities = [e1]} 
+edgeDocName targetEntity entities _owner para  = 
+    emptyRankLipsEdge { rankLipsTargetEntity = Just targetEntity
+                        , rankLipsEdgeEntities = entities 
+                        , rankLipsParagraph = Just para
+                        }
