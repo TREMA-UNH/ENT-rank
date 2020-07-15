@@ -4,7 +4,6 @@ allow-newer:
     profunctors
 
 packages:
-    vendor/pinch/
     trec-car-tools-haskell/trec-car-tools/
     trec-car-tools-haskell/trec-car-types/
     ent-rank-tools/
