@@ -774,7 +774,7 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                     , Candidates)
                         )] -> IO()
         exportEdgeDocsAssocs entries = do
-                let filename = outputFilePrefix <.>"edgedoc.assocs"<.>"jsonl"
+                let filename = outputFilePrefix <.>"edgedoc.assocs"<.>"jsonl"<.>"gz"
                     runEntries = [TRun.RankingEntry { queryId = query 
                                       , documentName = edgeDocName (HS.toList edgeDocNeighbors) edgeDocArticleId edgeDocParagraphId
                                       , documentRank  = 1
@@ -784,14 +784,14 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
                                   , EdgeDoc {..} <- edgeDocs  
                                   ]  
-                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
                 when (null runEntries) $ putStrLn "No entries for edgedoc-assocs"
         exportPairAssocs ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
                                     , [((PageId, PageId), EdgeFeature, Double)]
                                     , Candidates)
                         )] -> IO()
         exportPairAssocs entries = do
-                let filename = outputFilePrefix <.>"pairs.assocs"<.>"jsonl"
+                let filename = outputFilePrefix <.>"pairs.assocs"<.>"jsonl"<.>"gz"
                     runEntries = [TRun.RankingEntry { queryId = query 
                                       , documentName = edgeName e1 e2
                                       , documentRank  = 1
@@ -801,7 +801,7 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
                                   , [e1,e2] <- allEntityPairs edgeDocs  
                                   ]  
-                when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
                 when (null runEntries) $ putStrLn "No entries for pair-assocs"
 
         allEntityPairs :: [EdgeDoc] -> [[PageId]]
@@ -838,9 +838,9 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   ]  
                 mapConcurrentlyL_ 20 exportEntityFile $ M.toList runEntries
               where exportEntityFile (fname, runEntries) = do 
-                      let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"
+                      let filename = outputFilePrefix <.>(T.unpack $ printEntityFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
 
-                      when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                      when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
                       when (null runEntries) $ putStrLn $ ("No entries for entity feature "<> (T.unpack $ printEntityFeatureName fname))
 
         exportEdge ::  [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
@@ -862,8 +862,8 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                   ]  
                 mapConcurrentlyL_ 20 exportEdgeFile $ M.toList runEntries
               where exportEdgeFile (fname, runEntries) = do
-                      let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
-                      when (not $ null runEntries) $ JRun.writeJsonLRunFile filename runEntries 
+                      let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
+                      when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
                       when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
 
                 
@@ -894,7 +894,7 @@ rankLipsExportSlow args@(NormalFlowArguments {..})  = do
                         -> EdgeFeature
                         -> IO()
             writeJsonL entries fname = do
-                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"
+                let filename = outputFilePrefix <.>(T.unpack $ printEdgeFeatureName fname)<.>"run"<.>"jsonl"<.>"gz"
                     fidx = fromMaybe (error $ "could not find feature name " <> show fname) 
                          $ allEdgeFSpace  `F.lookupFeatureIndex ` fname
                     runEntries = [TRun.RankingEntry { queryId = query 
@@ -905,7 +905,7 @@ rankLipsExportSlow args@(NormalFlowArguments {..})  = do
                                       }
                                   | (query, doc, vec) <- entries  
                                   ]  
-                JRun.writeJsonLRunFile filename runEntries 
+                JRun.writeGzJsonLRunFile filename runEntries 
 
 
 
