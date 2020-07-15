@@ -159,19 +159,22 @@ printRun (GridRun' (GridRun queryModel retrievalModel expansionModel indexType))
 
 
 data RankLipsEdge = RankLipsEdge { rankLipsTargetEntity :: Maybe PageId
-                                 , rankLipsEdgeEntities :: [PageId]
+                                 , rankLipsNeighbors :: [PageId]
                                  , rankLipsParagraph :: Maybe ParagraphId
                                  }
 emptyRankLipsEdge :: RankLipsEdge
 emptyRankLipsEdge = RankLipsEdge { rankLipsTargetEntity = Nothing
-                                 , rankLipsEdgeEntities = []
+                                 , rankLipsNeighbors = []
                                  , rankLipsParagraph = Nothing
                                  }
 
 instance Aeson.ToJSON RankLipsEdge  where
     toJSON (RankLipsEdge{..} ) =
       Aeson.object 
-       $ [ "entity" .= [ e | e <- rankLipsEdgeEntities] ]      
+       $ [ "neighbor" .= [ e | e <- rankLipsNeighbors] ] 
+       ++ case rankLipsTargetEntity of 
+             Just pid -> [ "entity" .=  pid ]
+             Nothing -> []
        ++ case rankLipsParagraph of 
              Just pid -> [ "paragraph" .=  pid ]
              Nothing -> []
@@ -287,10 +290,10 @@ exportEdge outputFilePrefix entries  = do
                 when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
 
         
-edgeName e1 e2 = emptyRankLipsEdge { rankLipsEdgeEntities = [e1,e2]}
-entityName e1 = emptyRankLipsEdge{ rankLipsEdgeEntities = [e1]} 
+edgeName e1 e2 = emptyRankLipsEdge { rankLipsNeighbors = [e1,e2]}
+entityName e1 = emptyRankLipsEdge{ rankLipsNeighbors = [e1]} 
 edgeDocName targetEntity entities _owner para  = 
     emptyRankLipsEdge { rankLipsTargetEntity = Just targetEntity
-                        , rankLipsEdgeEntities = entities 
+                        , rankLipsNeighbors = entities 
                         , rankLipsParagraph = Just para
                         }
