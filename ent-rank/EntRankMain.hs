@@ -745,7 +745,7 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
                                     [((PageId, PageId), EdgeFeature, Double)]
                                     , Candidates )
                         )]
-        docFeatures = makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
+        docFeatures = makeExportFeatureVec (filterFeaturesByExperimentSetting experimentSettings) featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun
 
         
     exportEdgeDocsAssocs outputFilePrefix docFeatures

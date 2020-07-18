@@ -63,13 +63,14 @@ import NodeAndEdgeFeatures
 
 -- | merge entity and edge features
 computeEntityEdgeFeatures
-    :: FeatureGraphSettings
+    :: (Either EntityFeature EdgeFeature -> Bool)
+    -> FeatureGraphSettings
     -> QueryId
     -> PagesLookup
     -> AspectLookup
     -> Candidates
     -> (HM.HashMap PageId [(EntityFeature, Double)], [((PageId, PageId), EdgeFeature, Double)])
-computeEntityEdgeFeatures featureGraphSettings
+computeEntityEdgeFeatures featureFilter featureGraphSettings
                           query pagesLookup aspectLookup
                           cands@Candidates{ candidateEdgeDocs = allEdgeDocs
                                           , candidateEdgeRuns = edgeRun
@@ -79,10 +80,12 @@ computeEntityEdgeFeatures featureGraphSettings
                                           } =
     let
         nodeFeatures :: HM.HashMap PageId [(EntityFeature, Double)]
-        nodeFeatures = generateNodeFeatures query entityRun aspectRun allEdgeDocs
+        nodeFeatures = HM.map ( filter (\(f,_) -> featureFilter (Left f ))  ) 
+                     $ generateNodeFeatures query entityRun aspectRun allEdgeDocs
 
         edgeFeatures :: [((PageId, PageId), EdgeFeature, Double)]
-        edgeFeatures = generateEdgeFeatureGraph' featureGraphSettings query pagesLookup aspectLookup cands nodeFeatures
+        edgeFeatures = filter (\(_, f,_) -> featureFilter (Right f ) ) 
+                     $ generateEdgeFeatureGraph' featureGraphSettings query pagesLookup aspectLookup cands nodeFeatures
 
     in (nodeFeatures, edgeFeatures)
 
@@ -90,7 +93,8 @@ computeEntityEdgeFeatures featureGraphSettings
 
 -- | merge node and edge features (used for both training, prediction, and walking)
 makeExportFeatureVec ::
-       FeatureGraphSettings
+       (Either EntityFeature EdgeFeature -> Bool)
+    -> FeatureGraphSettings
     -> CandidateGraphGenerator
     -> PagesLookup
     -> AspectLookup
@@ -102,14 +106,14 @@ makeExportFeatureVec ::
                      , Candidates
                     ))]
        )  
-makeExportFeatureVec featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun =
+makeExportFeatureVec featureFilter featureGraphSettings candidateGraphGenerator pagesLookup aspectLookup collapsedEntityRun collapsedEdgedocRun collapsedAspectRun =
     withStrategy (parBuffer 200 rseq)
       [ (query, (ent, edge, candidates))
       | (query, edgeRun) <- M.toList collapsedEdgedocRun
       , let entityRun = fromMaybe [] $ query `M.lookup` collapsedEntityRun
       , let aspectRun = fromMaybe [] $ query `M.lookup` collapsedAspectRun
       , let candidates = candidateGraphGenerator query edgeRun entityRun aspectRun
-      , let (ent,edge) = computeEntityEdgeFeatures featureGraphSettings query pagesLookup aspectLookup candidates
+      , let (ent,edge) = computeEntityEdgeFeatures featureFilter featureGraphSettings query pagesLookup aspectLookup candidates
       ]
 
 
