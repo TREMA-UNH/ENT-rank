@@ -278,7 +278,7 @@ exportEdge outputFilePrefix entries  = do
         let runEntries =  M.fromListWith (<>)
                             [ (fname', 
                                 [TRun.RankingEntry { queryId = query 
-                                , documentName = edgeName e1 e2 
+                                , documentName = docName 
                                 , documentRank  = 1
                                 , documentScore =  featScore
                                 , methodName    = printEdgeFeatureName fname'
@@ -286,6 +286,7 @@ exportEdge outputFilePrefix entries  = do
                                 )
                             | (query, (_, edgeFeatList, _)) <- entries
                             , ((e1,e2), fname', featScore) <- edgeFeatList  
+                            , docName <- edgeName e1 e2
                             ]  
         mapConcurrentlyL_ 20 exportEdgeFile $ M.toList runEntries
         where exportEdgeFile (fname, runEntries) = do
@@ -293,9 +294,16 @@ exportEdge outputFilePrefix entries  = do
                 when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
                 when (null runEntries) $ putStrLn $ ("No entries for edge feature "<> (T.unpack $ printEdgeFeatureName fname))
 
-        
-edgeName e1 e2 = emptyRankLipsEdge { rankLipsNeighbors = [e1,e2]}
-entityName e1 = emptyRankLipsEdge{ rankLipsNeighbors = [e1]} 
+
+
+edgeName :: PageId -> PageId -> [RankLipsEdge]
+edgeName e1 e2 = [ emptyRankLipsEdge {rankLipsTargetEntity = Just e1,  rankLipsNeighbors = [e2]}
+                 , emptyRankLipsEdge {rankLipsTargetEntity = Just e2,  rankLipsNeighbors = [e1]}
+                 ]
+
+entityName :: PageId -> RankLipsEdge
+entityName e1 = emptyRankLipsEdge{ rankLipsTargetEntity = Just e1} 
+
 edgeDocName targetEntity entities _owner para  = 
     emptyRankLipsEdge { rankLipsTargetEntity = Just targetEntity
                         , rankLipsNeighbors = entities 
