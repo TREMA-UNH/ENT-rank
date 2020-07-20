@@ -214,14 +214,15 @@ exportPairAssocs ::   FilePath
                     -> IO()
 exportPairAssocs outputFilePrefix entries = do
         let filename = outputFilePrefix <.>"pairs.assocs"<.>"jsonl"<.>"gz"
-            runEntries = [TRun.RankingEntry { queryId = query 
-                                , documentName = edgeName e1 e2
+            runEntries = [  TRun.RankingEntry { queryId = query 
+                                , documentName = docName
                                 , documentRank  = 1
                                 , documentScore =  1.0
                                 , methodName    = "edge-assocs"
                                 }
                             | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
                             , [e1,e2] <- allEntityPairs edgeDocs  
+                            , docName <- edgeName e1 e2
                             ]  
         when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
         when (null runEntries) $ putStrLn "No entries for pair-assocs"
