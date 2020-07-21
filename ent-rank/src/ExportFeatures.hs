@@ -206,6 +206,7 @@ exportEdgeDocsAssocs outputFilePrefix entries = do
                             ]  
         when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
         when (null runEntries) $ putStrLn "No entries for edgedoc-assocs"
+
 exportPairAssocs ::   FilePath 
                      -> [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
                             , [((PageId, PageId), EdgeFeature, Double)]
@@ -223,6 +224,27 @@ exportPairAssocs outputFilePrefix entries = do
                             | (query, (_, _, Candidates{candidateEdgeDocs = edgeDocs})) <- entries
                             , [e1,e2] <- allEntityPairs edgeDocs  
                             , docName <- edgeName e1 e2
+                            ]  
+        when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
+        when (null runEntries) $ putStrLn "No entries for pair-assocs"
+
+exportEntityAssocs ::   FilePath 
+                     -> [(QueryId,  (HM.HashMap PageId [(EntityFeature, Double)]
+                            , [((PageId, PageId), EdgeFeature, Double)]
+                            , Candidates)
+                         )] 
+                    -> IO()
+exportEntityAssocs outputFilePrefix entries = do
+        let filename = outputFilePrefix <.>"entity.assocs"<.>"jsonl"<.>"gz"
+            runEntries = [  TRun.RankingEntry { queryId = query 
+                                , documentName = docName
+                                , documentRank  = 1
+                                , documentScore =  1.0
+                                , methodName    = "entity-assocs"
+                                }
+                            | (query, (nodeMap, _, _)) <- entries
+                            , e1 <- HM.keys nodeMap
+                            , let docName = entityName e1
                             ]  
         when (not $ null runEntries) $ JRun.writeGzJsonLRunFile filename runEntries 
         when (null runEntries) $ putStrLn "No entries for pair-assocs"

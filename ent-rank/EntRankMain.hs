@@ -750,8 +750,10 @@ rankLipsExport args@(NormalFlowArguments {..})  = do
         
     exportEdgeDocsAssocs outputFilePrefix docFeatures
     exportPairAssocs outputFilePrefix docFeatures
-    exportEntity outputFilePrefix docFeatures
+    exportEntityAssocs outputFilePrefix docFeatures
+
     exportEdge outputFilePrefix docFeatures
+    exportEntity outputFilePrefix docFeatures
 
 
 
