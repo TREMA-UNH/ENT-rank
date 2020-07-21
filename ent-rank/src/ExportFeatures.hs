@@ -163,19 +163,19 @@ printRun (GridRun' (GridRun queryModel retrievalModel expansionModel indexType))
 
 
 data RankLipsEdge = RankLipsEdge { rankLipsTargetEntity :: Maybe PageId
-                                 , rankLipsNeighbors :: [PageId]
+                                 , rankLipsNeighbors :: Maybe [PageId]
                                  , rankLipsParagraph :: Maybe ParagraphId
                                  }
 emptyRankLipsEdge :: RankLipsEdge
 emptyRankLipsEdge = RankLipsEdge { rankLipsTargetEntity = Nothing
-                                 , rankLipsNeighbors = []
+                                 , rankLipsNeighbors = Nothing
                                  , rankLipsParagraph = Nothing
                                  }
 
 instance Aeson.ToJSON RankLipsEdge  where
     toJSON (RankLipsEdge{..} ) =
       Aeson.object 
-       $ [ "neighbor" .= [ e | e <- rankLipsNeighbors] ] 
+       $ [ "neighbor" .= [ e | e <- fromMaybe [] rankLipsNeighbors] ] 
        ++ case rankLipsTargetEntity of 
              Just pid -> [ "entity" .=  pid ]
              Nothing -> []
@@ -320,8 +320,8 @@ exportEdge outputFilePrefix entries  = do
 
 
 edgeName :: PageId -> PageId -> [RankLipsEdge]
-edgeName e1 e2 = [ emptyRankLipsEdge {rankLipsTargetEntity = Just e1,  rankLipsNeighbors = [e2]}
-                 , emptyRankLipsEdge {rankLipsTargetEntity = Just e2,  rankLipsNeighbors = [e1]}
+edgeName e1 e2 = [ emptyRankLipsEdge {rankLipsTargetEntity = Just e1,  rankLipsNeighbors = Just [e2]}
+                 , emptyRankLipsEdge {rankLipsTargetEntity = Just e2,  rankLipsNeighbors = Just [e1]}
                  ]
 
 entityName :: PageId -> RankLipsEdge
@@ -329,6 +329,6 @@ entityName e1 = emptyRankLipsEdge{ rankLipsTargetEntity = Just e1}
 
 edgeDocName targetEntity entities _owner para  = 
     emptyRankLipsEdge { rankLipsTargetEntity = Just targetEntity
-                        , rankLipsNeighbors = entities 
+                        , rankLipsNeighbors = Just entities 
                         , rankLipsParagraph = Just para
                         }
